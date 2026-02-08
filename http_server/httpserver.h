@@ -8,9 +8,17 @@
 #include <errno.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+
+#define SA struct sockaddr // shorthand for the sockaddr struct to not hate myself
 
 typedef struct {
     int fd;
+    int connfd;
+    int len;
+    struct sockaddr_in servaddr, cli;
 } Listener_Socket;
 
 /** @brief initializes listener socket that listens on the provided port on all of the interfaces for the host
