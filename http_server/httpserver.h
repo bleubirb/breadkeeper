@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdint.h>
+#include <sys/types.h>
 
 typedef struct {
     int fd;
