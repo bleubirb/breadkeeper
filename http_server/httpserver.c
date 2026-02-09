@@ -44,15 +44,26 @@ int listener_init(Listener_Socket *sock, int port) {
 
 int listener_accept(Listener_Socket *sock) {
     sock->len = sizeof(sock->cli);
-    sock->connfd = accept(sock->fd, (SA *)&sock->cli, &sock->len);
-    while (sock->connfd < 0) {
-        printf("server accept failed\n");
-        // return -1;
-    } 
-    // else {
-    printf("server accepted client\n");
-    return 0;
+
+    if (listen(sock->fd, 10) < 0) {
+        printf("listen failed\n");
+        return -1;
+    } else {
+        printf("server listening\n");
+    }
+
+    // while (1) {
+        sock->connfd = accept(sock->fd, (SA *)&sock->cli, &sock->len);
+        printf("%d\n", sock->connfd);
     // }
+
+    if (sock->connfd < 0) {
+        printf("server accept failed\n");
+        return -1;
+    } else {
+        printf("server accepted client\n");
+    return 0;
+    }
 }
 
 ssize_t read_n_bytes(int in, char buf[], size_t n) {
@@ -137,7 +148,7 @@ int main(int argc, char *argv[]) {
         r.info = sock_fd;
         // read bytes until we get the end of the header, which is denoted by \r\n\r\n
         ssize_t bytes_read = 0;
-        while (strstr(buf, "\r\n\r\n") == NULL) {
+        while (strstr(buf, "\r\n\r\n") != NULL) {
             ssize_t n = read_n_bytes(sock_fd, buf + bytes_read, BUFFER - bytes_read);
             if (n < 0) {
                 fprintf(stderr, "failed to read from client\n");
@@ -153,7 +164,7 @@ int main(int argc, char *argv[]) {
                 }
             }
         printf("header read successfully\n");
-        exit(0);
+        // exit(0);
         }
     }
 }
