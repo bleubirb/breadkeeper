@@ -38,9 +38,20 @@ int req_parse(req *r, char *buf, ssize_t read_size) {
     r->version = "";
     if (req_code == 0) { // regex returns something valid
         r->command = buf; // gets the command "GET" or "PUT"
-        r->target_path = buf + match[2].rm_so; 
-        r->version = buf + match[3].rm_so;
+        r->target_path = buf + match[2].rm_so; // pulls the file location
+        r->version = buf + match[3].rm_so; // uses http version
         buf[match[1].rm_eo] = '\0'; // null terminate the buffer after reading path and version
+
+        // separating the silly requests
+        r->target_path[match[2].rm_eo - match[3].rm_eo] = '\0';
+        r->version[match[3].rm_eo - match[3].rm_eo] = '\0';
+        // moving buffer and offset to the next line for further requests
+        buf += match[3].rm_eo + 2; 
+        offset += match[3].rm_eo + 2;
+    } else {
+        dprintf(r->info, "HTTP/1.1 400 Bad Request\r\nContent-Length: %d\r\n\r\nBad Request\n", 12);
+        regfree(&regex);
+        return 1;
     }
 
 }
