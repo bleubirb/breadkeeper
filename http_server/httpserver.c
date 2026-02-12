@@ -52,10 +52,8 @@ int listener_accept(Listener_Socket *sock) {
         printf("server listening\n");
     }
 
-    // while (1) {
-        sock->connfd = accept(sock->fd, (SA *)&sock->cli, &sock->len);
-        printf("%d\n", sock->connfd);
-    // }
+    sock->connfd = accept(sock->fd, (SA *)&sock->cli, &sock->len);
+    printf("%d\n", sock->connfd);
 
     if (sock->connfd < 0) {
         printf("server accept failed\n");
@@ -164,7 +162,7 @@ int main(int argc, char *argv[]) {
                 }
             }
         printf("header read successfully\n");
-        // exit(0);
+        exit(0);
         }
     }
 }
