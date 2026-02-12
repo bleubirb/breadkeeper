@@ -14,6 +14,8 @@
 
 #define SA struct sockaddr // shorthand for the sockaddr struct to not hate myself
 
+#define BUFFER 4096 // buffer intake size when taking in a message
+
 typedef struct {
     int fd;
     int connfd;
@@ -83,3 +85,12 @@ ssize_t write_n_bytes(int out, char buf[], size_t n);
  */
 ssize_t pass_n_bytes(int src, int dst, size_t n);
 
+/** @brief parses request from src in order to determine to handle PUT or GET
+ *  
+ * @param r request to parse
+ * 
+ * @param buf buffer to put request into
+ * 
+ * @param read_size size of message
+ */
+int req_parse(req *r, char *buf, ssize_t read_size);
