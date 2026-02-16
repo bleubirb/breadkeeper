@@ -4,9 +4,9 @@
 
 #include "httpserver.h"
 
-#define REQ_REGEX "^([a-zA-Z]{1,8}) /([a-zA-Z0-9\\._-]{1,63}) (HTTP/[0-9]\\.[0-9])" // 1-8 ascii characters
+#define REQ_REGEX "^([a-zA-Z]{1,8}) /([a-zA-Z0-9\\.-]{1,63}) (HTTP/[0-9]\\.[0-9])\r\n" // 1-8 ascii characters
 
-#define HEAD_REGEX "^([a-zA-Z][a-zA-Z0-9_-]*): (.+)$" // 32-126 ascii characters
+#define HEAD_REGEX "([a-zA-Z0-9.-]{1,128}): ([ -~]{1,128})\r\n" // 32-126 ascii characters
 
 // TODO: put and get functions
 // TODO: multi-thread with rw-locks
@@ -29,7 +29,9 @@ int put(req *r) {
     //     close(fd);
     // }
     // fprintf(stderr, "file does not exist, creating file\n");
-    uint8_t fd = open(r->target_path, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+    fprintf(stderr, "r->target_path: $%s$\n", r->target_path);
+    uint8_t fd = open(r->target_path, O_CREAT | O_WRONLY | O_EXCL, 0666);
+    fprintf(stderr, "open file fd: %d\n", fd);
     if (fd < 0) {
         if (errno == EEXIST) {
             fprintf(stderr, "file already exists\n");
@@ -51,7 +53,9 @@ int put(req *r) {
     }
 
     if (status == 200) {
-        fd = open(r->target_path, O_WRONLY | O_TRUNC | O_CREAT, 0666);
+        fprintf(stderr, "file already exists, opening file\n");
+        // fd = open(r->target_path, O_WRONLY | O_TRUNC | O_CREAT, 0666);
+        fd = open(r->target_path, O_WRONLY | O_TRUNC, 0666);
         if (fd == -1) {
             if (errno == EACCES) {
                 dprintf(r->info, "HTTP/1.1 403 Forbidden\r\nContent-Length: %d\r\n\r\nForbidden\n", 9);
@@ -63,7 +67,7 @@ int put(req *r) {
         }
     }
     fprintf(stderr, "r->info: %d, fd: %d, content_length: %d\n", r->info, fd, r->content_length);
-    ssize_t bytes_written = pass_n_bytes(r->info, fd, r->content_length);
+    ssize_t bytes_written = pass_n_bytes(r->info, fd, r->content_length); // pass bytes from client to file
     if (bytes_written < 0) {
         fprintf(stderr, "failed to write to file\n");
         dprintf(r->info, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: %d\r\n\r\nInternal Server Error\n", 21);
@@ -92,7 +96,7 @@ int trace(req *r) {
 }
 
 int req_handle(req *r) {
-    if (strncmp(r->version, "HTTP/1.1", 8) == 0) {
+    if (strncmp(r->version, "HTTP/1.1", 8) != 0) {
         dprintf(r->info, "HTTP/1.1 505 Version Not Supported\r\nContent-Length: %d\r\n\r\nVersion Not Supported\n", 22);
         return 0;
     } else if (strncmp(r->command, "GET", 3) == 0) {
@@ -113,7 +117,6 @@ int req_handle(req *r) {
  * for reference, an HTTP request comes in the form of: GET /hello.htm HTTP/1.1
  */
 int req_parse(req *r, char *buf, ssize_t read_size) {
-    fprintf(stderr, "buf: %s\n", buf);
     uint8_t offset = 0; // keeping track of where we are in buffer
     regex_t regex; 
     regmatch_t match[5]; // store matches from regex
@@ -122,7 +125,6 @@ int req_parse(req *r, char *buf, ssize_t read_size) {
     req_code = regexec(&regex, buf, 5, match, 0);
     // TODO: fix regex
     if (req_code == REG_NOMATCH) {
-        fprintf(stderr, "failed big time\n");
         dprintf(r->info, "HTTP/1.1 400 Bad Request\r\nContent-Length: %d\r\n\r\nBad Request\n", 13);
         regfree(&regex);
         return 1;
@@ -132,11 +134,12 @@ int req_parse(req *r, char *buf, ssize_t read_size) {
         r->command = buf;
         r->target_path = buf + match[2].rm_so; // pulls the file location
         r->version = buf + match[3].rm_so; // uses http version
-        buf[match[1].rm_eo] = '\0'; // null terminate the buffer after reading path and version
 
+        buf[match[1].rm_eo] = '\0'; // null terminate the buffer after reading path and version
+        
         // separating the silly requests
-        r->target_path[match[2].rm_eo - match[3].rm_eo] = '\0';
-        r->version[match[3].rm_eo - match[3].rm_eo] = '\0';
+        r->target_path[match[2].rm_eo - match[2].rm_so] = '\0';
+        r->version[match[3].rm_eo - match[3].rm_so] = '\0';
         // moving buffer and offset to the next line for further requests
         buf += match[3].rm_eo + 2;
         offset += match[3].rm_eo + 2;
@@ -146,28 +149,38 @@ int req_parse(req *r, char *buf, ssize_t read_size) {
         regfree(&regex);
         return 1;
     }
+    regfree(&regex);
     r->content_length = -1;
     req_code = regcomp(&regex, HEAD_REGEX, REG_EXTENDED);
-    req_code = regexec(&regex, buf, 4, match, 0);
-    char *tok = strtok(buf, "\n");
+    req_code = regexec(&regex, buf, 3, match, 0);
 
-    while (tok != NULL) {
-        uint8_t len = strlen(tok);
-        tok[len - 1] = '\0';
-        if (strncmp(tok, "Content-Length", 14) == 0) {
-            uint8_t val = strtoull(tok + 16, NULL, 10); 
+    while (req_code == 0) {
+        buf[match[1].rm_eo] = '\0';
+        buf[match[2].rm_eo] = '\0';
+
+        if (strncmp(buf, "Content-Length", 14) == 0) {
+            int val = strtol(buf + match[2].rm_so, NULL, 10);
             if (errno == EINVAL) {
                 dprintf(r->info, "HTTP/1.1 400 Bad Request\r\nContent-Length: %d\r\n\r\nBad Request\n", 11);
+                regfree(&regex);
+                return 1;
             }
             r->content_length = val;
         }
-        buf += strlen(tok) + 1;
-        offset += strlen(tok) + 1;
-        tok = strtok(NULL, "\n");
+        buf += match[2].rm_eo + 2;
+        offset += match[2].rm_eo + 2;
+        req_code = regexec(&regex, buf, 3, match, 0);
     }
-    r->message = buf + 2; // move past the \r\n\r\n to the message body
-    offset += 2;
-    r->bytes = read_size - offset;
+
+    if ((req_code != 0) && (buf[0] == '\r' && buf[1] == '\n')) {
+        r->message = buf + 2;
+        offset += 2;
+        r->bytes = read_size - offset;
+    } else if (req_code == REG_NOMATCH) {
+        dprintf(r->info, "HTTP/1.1 400 Bad Request\r\nContent-Length: %d\r\n\r\nBad Request\n", 11);
+        regfree(&regex);
+        return 1;
+    }
 
     memset(buf, '\0', BUFFER + 1);
     regfree(&regex);
@@ -209,22 +222,22 @@ int main(int argc, char *argv[]) {
         ssize_t bytes_read = 0;
         ssize_t n = 0;
         while ((strstr(buf, "\r\n\r\n") == NULL) && (n != -1)) {
-            n = read_n_bytes(sock_fd, buf + bytes_read, BUFFER - bytes_read);
+            n = read_n_bytes(r.info, buf + bytes_read, BUFFER - bytes_read);
             fprintf(stderr, "read from client n: %ld\n", n);
             if (n < 0) {
                 fprintf(stderr, "failed to read from client\n");
                 dprintf(r.info, "HTTP/1.1 400 Bad Request\r\nContent-Length: %d\r\n\r\nBad Request\n", 11);
-                close(sock_fd);
+                close(r.info);
                 continue;
             } else if (n == 0) {
                 fprintf(stderr, "client closed connection\n");
-                close(sock_fd);
+                close(r.info);
                 continue;
             } else {
                 bytes_read += n;
                 if (bytes_read >= BUFFER) {
                     fprintf(stderr, "header too large\n");
-                    close(sock_fd);
+                    close(r.info);
                     continue;
                 }
             }
@@ -234,7 +247,7 @@ int main(int argc, char *argv[]) {
             req_handle(&r);
         } 
     }
-    close(sock_fd);
+    close(r.info);
     memset(buf, '\0', BUFFER + 1);
     }
     return 0;

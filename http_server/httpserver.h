@@ -70,7 +70,7 @@ int listener_accept(Listener_Socket *sock);
  *
  * @return number of bytes read, or -1 if error occurs. timeout is an error
  */
-ssize_t read_n_bytes(int in, char buf[], size_t n);
+ssize_t read_n_bytes(int in, char *buf, size_t n);
 
 /** @brief writes bytes to out from buf until either:
  *          (1) it has written exactly n bytes or
@@ -84,7 +84,7 @@ ssize_t read_n_bytes(int in, char buf[], size_t n);
  *
  * @return number of bytes written or -1 for error
  */
-ssize_t write_n_bytes(int out, char buf[], size_t n);
+ssize_t write_n_bytes(int out, char *buf, size_t n);
 
 /** @brief reads bytes from src and places them in dest until either:
  *          (1) it has read/written exactly nbytes,
@@ -143,4 +143,4 @@ int put(req *r);
  */
 int trace(req *r);
 
-#endif
+#endif /* HTTPSERVER_H */

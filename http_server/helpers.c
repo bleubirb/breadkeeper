@@ -47,23 +47,24 @@ int listener_accept(Listener_Socket *sock) {
     }
 }
 
-ssize_t read_n_bytes(int in, char buf[], size_t n) {
+ssize_t read_n_bytes(int in, char *buf, size_t n) {
     size_t bytes_read = 0;
     while (bytes_read < n) {
         ssize_t r = read(in, buf + bytes_read, n - bytes_read);
+        fprintf(stderr, "read_n_bytes r: %ld\n", r);
         if (r < 0) {
             return -1; // error
         } else if (r == 0) {
             break; // end of file
         } else {
-            bytes_read += r;
+            bytes_read += (size_t)r;
         }
         break;
     }
     return bytes_read;
 }
 
-ssize_t write_n_bytes(int out, char buf[], size_t n) {
+ssize_t write_n_bytes(int out, char *buf, size_t n) {
     size_t bytes_written = 0;
     while (bytes_written < n) {
         ssize_t w = write(out, buf + bytes_written, n - bytes_written);
@@ -77,14 +78,14 @@ ssize_t write_n_bytes(int out, char buf[], size_t n) {
 }
 
 ssize_t pass_n_bytes(int src, int dst, size_t n) {
-    size_t bytes_passed = 0;
+    size_t bytes_passed = n;
     char buf[BUFFER];
-    while (bytes_passed < n) {
+    while (bytes_passed > 0) {
+        fprintf(stderr, "bytes_passed: %zu\n", bytes_passed);
         // TODO: debug why read() is not reading
         size_t to_read = (n - bytes_passed) < BUFFER ? (n - bytes_passed) : BUFFER;
-        fprintf(stderr, "to_read: %zu\n", to_read);
-        ssize_t r = read(src, buf, to_read);
-        fprintf(stderr, "read from file r: %ld\n", r);
+        ssize_t r = read_n_bytes(src, buf, to_read);
+        fprintf(stderr, "read_n_bytes r: %ld\n", r);
         if (r < 0) {
             return -1; // error
         } else if (r == 0) {
@@ -95,7 +96,7 @@ ssize_t pass_n_bytes(int src, int dst, size_t n) {
             if (w < 0) {
                 return -1; // error
             } else {
-                bytes_passed += w;
+                bytes_passed -= (size_t)w;
             }
         }
     }
