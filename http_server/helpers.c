@@ -21,6 +21,7 @@ int listener_init(Listener_Socket *sock, int port) {
             return -1;
         } else {
             printf("sock successfully binded\n");
+            return 1;
         }
     }
 }
@@ -36,14 +37,13 @@ int listener_accept(Listener_Socket *sock) {
     }
 
     sock->connfd = accept(sock->fd, (SA *)&sock->cli, &sock->len);
-    printf("%d\n", sock->connfd);
 
     if (sock->connfd < 0) {
         printf("server accept failed\n");
         return -1;
     } else {
         printf("server accepted client\n");
-    return 0;
+        return sock->connfd;
     }
 }
 
@@ -58,6 +58,7 @@ ssize_t read_n_bytes(int in, char buf[], size_t n) {
         } else {
             bytes_read += r;
         }
+        break;
     }
     return bytes_read;
 }
@@ -79,13 +80,17 @@ ssize_t pass_n_bytes(int src, int dst, size_t n) {
     size_t bytes_passed = 0;
     char buf[BUFFER];
     while (bytes_passed < n) {
+        // TODO: debug why read() is not reading
         size_t to_read = (n - bytes_passed) < BUFFER ? (n - bytes_passed) : BUFFER;
+        fprintf(stderr, "to_read: %zu\n", to_read);
         ssize_t r = read(src, buf, to_read);
+        fprintf(stderr, "read from file r: %ld\n", r);
         if (r < 0) {
             return -1; // error
         } else if (r == 0) {
             break; // end of file
         } else {
+            fprintf(stderr, "read from client r: %ld\n", r);
             ssize_t w = write_n_bytes(dst, buf, r);
             if (w < 0) {
                 return -1; // error
